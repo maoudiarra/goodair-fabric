@@ -152,14 +152,22 @@ La plateforme GoodAir existe déjà en version auto-hébergée : collecte horair
 
 **Période cible :** semaines 1-2 · **Statut :** ⬜
 
-- [ ] Lakehouse créé, arborescence `Files/` définie
-- [ ] Notebook d'ingestion AQICN (10 villes) fonctionnel
-- [ ] Notebook d'ingestion OpenWeatherMap fonctionnel
-- [ ] Gestion des erreurs API (timeout, quota, statut ≠ ok) reprise de l'existant
-- [ ] Clés API externalisées (pas de secret en dur dans le notebook)
-- [ ] Même ingestion refaite en pipeline Data Factory (activité Web + ForEach)
-- [ ] Convention de nommage des chemins documentée
+- [ x] Lakehouse créé, arborescence `Files/` définie
+- [ x] Notebook d'ingestion AQICN (10 villes) fonctionnel
+- [x ] Notebook d'ingestion OpenWeatherMap fonctionnel
+- [ x] Gestion des erreurs API (timeout, quota, statut ≠ ok) reprise de l'existant
+- [x ] Clés API externalisées (pas de secret en dur dans le notebook)
+- [ x] Même ingestion refaite en pipeline Data Factory (activité Web + ForEach)
+- [x ] Convention de nommage des chemins documentée
+**Convention de nommage retenue**
 
+Éléments Fabric :
+- `lh_` Lakehouse · `nb_`/`NN_` notebooks · `pl_` pipelines · `wh_` warehouse
+
+Chemins Bronze (repris de GoodAir v1) :
+Files/bronze/{source}/{aaaa}/{mm}/{jj}/{ville}_{hh}h.json
+
+Idempotence : réexécution dans la même heure = écrasement du fichier.
 **Notes techniques :**
 
 **Écarts avec l'existant GoodAir :**
