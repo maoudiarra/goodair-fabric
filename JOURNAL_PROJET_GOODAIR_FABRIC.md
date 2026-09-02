@@ -150,29 +150,65 @@ La plateforme GoodAir existe déjà en version auto-hébergée : collecte horair
 
 ### Lot 1 — Ingestion et couche Bronze
 
-**Période cible :** semaines 1-2 · **Statut :** ⬜
+**Période cible :** semaines 1-2 · **Réalisé le :** 02/09/2026 · **Statut :** ✅
 
-- [ x] Lakehouse créé, arborescence `Files/` définie
-- [ x] Notebook d'ingestion AQICN (10 villes) fonctionnel
-- [x ] Notebook d'ingestion OpenWeatherMap fonctionnel
-- [ x] Gestion des erreurs API (timeout, quota, statut ≠ ok) reprise de l'existant
-- [x ] Clés API externalisées (pas de secret en dur dans le notebook)
-- [ x] Même ingestion refaite en pipeline Data Factory (activité Web + ForEach)
-- [x ] Convention de nommage des chemins documentée
+- [x] Lakehouse `lh_goodair` créé dans le workspace `lab-data-engineering`
+- [x] Notebook `01_ingestion_aqicn` fonctionnel (10 villes, OK 10 / KO 0)
+- [x] Notebook `02_ingestion_openweather` fonctionnel (10 villes, OK 10 / KO 0)
+- [x] Gestion des erreurs API reprise de GoodAir v1 (timeout 30 s, vérification du statut, compteur OK/KO)
+- [x] Clés API externalisées dans `Files/secrets.json`, hors versionnement Git
+- [x] Ingestion orchestrée par le pipeline `pl_goodair_ingestion` (Data Factory)
+- [x] Convention de nommage documentée
+- [ ] *Optionnel, reporté* : variante d'ingestion 100 % low-code (activité Web + ForEach, sans Python)
+
+**Éléments Fabric créés**
+
+| Élément | Nom | Rôle |
+|---|---|---|
+| Lakehouse | `lh_goodair` | Stockage OneLake, couches Bronze/Silver/Gold |
+| Notebook | `01_ingestion_aqicn` | Collecte API AQICN → Bronze |
+| Notebook | `02_ingestion_openweather` | Collecte API OpenWeatherMap → Bronze |
+| Notebook | `99_journal_metrics` | Génération des métriques pour ce journal |
+| Pipeline | `pl_goodair_ingestion` | Orchestration séquentielle des deux ingestions |
+
 **Convention de nommage retenue**
 
-Éléments Fabric :
-- `lh_` Lakehouse · `nb_`/`NN_` notebooks · `pl_` pipelines · `wh_` warehouse
+Préfixes des éléments Fabric :
+`lh_` Lakehouse · `pl_` pipeline · `wh_` warehouse · `NN_` notebooks numérotés dans l'ordre d'exécution (`99_` réservé aux utilitaires hors production).
 
-Chemins Bronze (repris de GoodAir v1) :
-Files/bronze/{source}/{aaaa}/{mm}/{jj}/{ville}_{hh}h.json
+Chemins de la couche Bronze, repris à l'identique de GoodAir v1 :
 
-Idempotence : réexécution dans la même heure = écrasement du fichier.
-**Notes techniques :**
+Idempotence : une réexécution dans la même heure écrase le fichier existant. Granularité horaire assumée, cohérente avec la planification du pipeline.
 
-**Écarts avec l'existant GoodAir :**
+**Résultats du premier run orchestré** (ID `a29ac187-4475-4122-b3f3-52b879b0d385`)
 
----
+| Activité | Statut | Durée |
+|---|---|---|
+| `nb_ingestion_aqicn` | Réussi | 1 min 05 s |
+| `nb_ingestion_openweather` | Réussi | 37 s |
+| **Pipeline complet** | **Réussi** | **~1 min 45 s** |
+
+Volumétrie : 20 fichiers JSON en Bronze (10 par source).
+
+**Écarts avec GoodAir v1**
+
+| Point | GoodAir v1 | Fabric | Commentaire |
+|---|---|---|---|
+| Écriture des fichiers | `client.put_object()` via SDK MinIO | `open()` sur `/lakehouse/default/Files` | OneLake est monté comme système de fichiers : code plus simple, mais dépendance à Fabric |
+| Secrets | `.env` + `python-dotenv` | `secrets.json` dans le Lakehouse | Solution transitoire — migration vers Azure Key Vault à prévoir (voir dette technique) |
+| Durée d'un run | 20-25 s | ~1 min 45 s | Coût du démarrage des sessions Spark managées |
+| Infrastructure | Docker Compose (MinIO + Airflow) | Aucune | Suppression complète de la couche conteneurs |
+| Duplication de code | Module partagé `minio_client.py` | `save_to_bronze()` copiée dans les 2 notebooks | Dette technique — à factoriser via `%run` ou environnement custom |
+
+**Dette technique identifiée**
+
+| # | Sujet | Impact | Résolution prévue |
+|---|---|---|---|
+| DT1 | `secrets.json` stocké en clair dans le Lakehouse | Toute personne ayant accès au workspace lit les clés API | Azure Key Vault (Lot 7) |
+| DT2 | `save_to_bronze()` dupliquée entre les deux notebooks | Maintenance en double | Factorisation (Lot 3) |
+
+**Compétences DP-700 travaillées**
+Configurer un espace de travail · Ingérer des données en batch · Orchestrer avec un pipeline · Implémenter le contrôle de version (Git)
 
 ### Lot 2 — Silver, Gold et Warehouse
 
