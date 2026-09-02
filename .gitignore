@@ -2,3 +2,8 @@ secrets.json
 *.env
 __pycache__/
 .ipynb_checkpoints/
+
+# Projet précédent (dépôt séparé)
+goodair_auth_v2/
+goodair_auth_v2.zip
+grok_logs.csv
