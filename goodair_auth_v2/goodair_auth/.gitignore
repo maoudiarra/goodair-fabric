@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environnement
+.env
+*.env
+
+# VS Code
+.vscode/
+
+# Logs Airflow
+logs/
+
+# Airflow cache
+airflow/logs/
+airflow/dags/__pycache__/
+
+# MinIO data
+minio_data/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# PostgreSQL dumps
+*.sql.backup
+*.dump
+
+# Machine Learning
+*.joblib
+*.pkl
+
+# Power BI
+*.pbix
+
+# Docker
+*.tar
+
+# Images temporaires
+*.tmp
+# Django env
+goodair_viz/.env

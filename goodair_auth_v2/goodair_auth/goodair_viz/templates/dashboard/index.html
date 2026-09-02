@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoodAir — Dashboard Qualité de l'Air</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <!-- Leaflet Heatmap -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #eee; }
+
+        /* ── HEADER ── */
+        header {
+            background: linear-gradient(135deg, #7B2D8B, #4A1560);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        header h1 { font-size: 1.6rem; color: white; letter-spacing: 1px; }
+        header span { font-size: 0.85rem; color: #ddd; }
+        #last-update { font-size: 0.8rem; color: #ccc; }
+
+        /* ── LAYOUT ── */
+        .container {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            grid-template-rows: auto 1fr;
+            gap: 12px;
+            padding: 12px;
+            height: calc(100vh - 64px);
+        }
+
+        /* ── KPI CARDS ── */
+        .kpi-row {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 10px;
+        }
+        .kpi-card {
+            flex: 1;
+            background: #1a1d27;
+            border-radius: 10px;
+            padding: 14px 18px;
+            border-left: 4px solid #7B2D8B;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .kpi-card .label { font-size: 0.75rem; color: #888; text-transform: uppercase; }
+        .kpi-card .value { font-size: 1.6rem; font-weight: bold; color: white; }
+        .kpi-card .sub { font-size: 0.75rem; color: #aaa; }
+
+        /* ── PANEL GAUCHE ── */
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+        }
+
+        .panel {
+            background: #1a1d27;
+            border-radius: 10px;
+            padding: 16px;
+        }
+        .panel h3 {
+            font-size: 0.9rem;
+            color: #7B2D8B;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #2a2d3a;
+        }
+
+        /* ── LISTE VILLES ── */
+        .ville-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 10px;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .ville-item:hover { background: #2a2d3a; }
+        .ville-item .nom { font-size: 0.9rem; font-weight: 500; }
+        .ville-item .aqi-badge {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #000;
+        }
+        .ville-item .niveau { font-size: 0.7rem; color: #888; margin-top: 2px; }
+
+        /* ── POPUP INFO VILLE ── */
+        #ville-detail {
+            display: none;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .detail-item {
+            background: #0f1117;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        .detail-item .d-label { font-size: 0.7rem; color: #888; }
+        .detail-item .d-value { font-size: 1.1rem; font-weight: bold; color: white; }
+
+        /* ── GRAPHIQUE HISTORIQUE ── */
+        #chart-container { height: 160px; }
+
+        /* ── CARTE ── */
+        #map {
+            border-radius: 10px;
+            z-index: 1;
+        }
+
+        /* ── LEGENDE AQI ── */
+        .legend {
+            background: #1a1d27;
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            font-size: 0.78rem;
+        }
+        .legend-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* ── TOGGLE HEATMAP ── */
+        .toggle-btn {
+            background: #7B2D8B;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            width: 100%;
+            margin-top: 8px;
+        }
+        .toggle-btn:hover { background: #9B3DAB; }
+
+        /* ── QUALITE BADGE ── */
+        .statut-ok { color: #00E400; font-weight: bold; }
+        .statut-warning { color: #FF7E00; font-weight: bold; }
+
+        /* ── LEAFLET POPUP ── */
+        .leaflet-popup-content-wrapper {
+            background: #1a1d27;
+            color: #eee;
+            border-radius: 10px;
+            border: 1px solid #7B2D8B;
+        }
+
+        /* ── Contrôle fonds de carte ── */
+.leaflet-control-layers {
+    background: #1a1d27 !important;
+    border: 1px solid #7B2D8B !important;
+    border-radius: 8px !important;
+    color: #eee !important;
+}
+.leaflet-control-layers-base label {
+    color: #eee !important;
+    font-size: 0.85rem !important;
+    padding: 4px 0 !important;
+}
+.leaflet-control-layers-toggle {
+    background-color: #7B2D8B !important;
+}
+
+
+
+        .leaflet-popup-tip { background: #1a1d27; }
+        .popup-title { font-size: 1rem; font-weight: bold; color: #7B2D8B; margin-bottom: 8px; }
+        .popup-row { display: flex; justify-content: space-between; font-size: 0.82rem; margin: 3px 0; }
+        .popup-row .pk { color: #888; }
+        .popup-row .pv { font-weight: 500; }
+        .popup-divider { border: none; border-top: 1px solid #2a2d3a; margin: 6px 0; }
+        .popup-pred { font-size: 0.8rem; color: #aaa; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🌬️ GoodAir — Dashboard Qualité de l'Air</h1>
+    <div>
+        <span>Plateforme Big Data Environnementale — MSPR2 TPRE845</span><br>
+        <span id="last-update">Chargement...</span>
+    </div>
+</header>
+
+<div class="container">
+
+    <!-- KPI ROW -->
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">AQI Moyen France</div>
+            <div class="value" id="kpi-aqi-moyen">—</div>
+            <div class="sub">10 villes surveillées</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Ville la plus polluée</div>
+            <div class="value" id="kpi-max-ville">—</div>
+            <div class="sub" id="kpi-max-aqi">AQI : —</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Ville la plus saine</div>
+            <div class="value" id="kpi-min-ville">—</div>
+            <div class="sub" id="kpi-min-aqi">AQI : —</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Qualité des données</div>
+            <div class="value" id="kpi-qualite">—</div>
+            <div class="sub" id="kpi-completude">Complétude : —</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Dernière collecte</div>
+            <div class="value" id="kpi-heure">—</div>
+            <div class="sub">Pipeline Airflow @hourly</div>
+        </div>
+    </div>
+
+    <!-- PANEL GAUCHE -->
+    <div class="left-panel">
+
+        <!-- Liste villes -->
+        <div class="panel">
+            <h3>🏙️ Villes — AQI Actuel</h3>
+            <div id="villes-list">Chargement...</div>
+        </div>
+
+        <!-- Détail ville sélectionnée -->
+        <div class="panel" id="ville-detail">
+            <h3 id="detail-titre">📍 Détail ville</h3>
+            <div class="detail-grid" id="detail-grid"></div>
+            <br>
+            <h3>📈 Historique AQI 24h</h3>
+            <div id="chart-container">
+                <canvas id="chart-aqi"></canvas>
+            </div>
+        </div>
+
+        <!-- Légende -->
+        <div class="panel legend">
+            <h3>📊 Niveaux AQI</h3>
+            <div class="legend-item"><div class="legend-dot" style="background:#00E400"></div> 0-50 : Bon</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#FFFF00"></div> 51-100 : Modéré</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#FF7E00"></div> 101-150 : Mauvais (sensibles)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#FF0000"></div> 151-200 : Mauvais</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#8F3F97"></div> 201-300 : Très mauvais</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#7E0023"></div> 300+ : Dangereux</div>
+            <button class="toggle-btn" onclick="toggleHeatmap()">🔥 Activer Heatmap</button>
+        </div>
+
+        <!-- Qualité données -->
+        <div class="panel">
+            <h3>✅ Qualité des données</h3>
+            <div id="qualite-panel">Chargement...</div>
+        </div>
+
+    </div>
+
+    <!-- CARTE LEAFLET -->
+    <div id="map"></div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// INITIALISATION CARTE — FONDS MULTIPLES
+// ══════════════════════════════════════════
+const map = L.map('map').setView([46.5, 2.5], 6);
+
+// ── Fond 1 : CartoDB Dark (défaut) ──
+const cartoDark = L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    { attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19 }
+);
+
+// ── Fond 2 : OpenStreetMap (via CartoDB) ──
+const osm = L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    {
+        attribution: '© OpenStreetMap © CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
+    }
+);
+
+// ── Fond 3 : Satellite (Esri) ──
+const satellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: '© Esri — Source: Esri, Maxar, Earthstar Geographics', maxZoom: 19 }
+);
+
+// ── Fond 4 : CartoDB Light ──
+const cartoLight = L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    { attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19 }
+);
+
+// Activer le fond par défaut
+cartoDark.addTo(map);
+
+// ── Contrôle de sélection des fonds ──
+const baseMaps = {
+    "🌑 Dark (défaut)":   cartoDark,
+    "🗺️ OpenStreetMap":   osm,
+    "🛰️ Satellite":       satellite,
+    "☀️ Light":           cartoLight,
+};
+
+L.control.layers(baseMaps, null, {
+    position: 'topright',
+    collapsed: false
+}).addTo(map);
+
+// ── Bouton retour zoom initial ──
+const homeBtn = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd: function() {
+        const btn = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        btn.innerHTML = `
+            <a href="#" title="Revenir à la vue initiale"
+               style="
+                   display:flex; align-items:center; justify-content:center;
+                   width:30px; height:30px;
+                   background:#1a1d27;
+                   color:#7B2D8B;
+                   font-size:16px;
+                   text-decoration:none;
+                   border:1px solid #7B2D8B;
+               ">🏠</a>`;
+        btn.onclick = function(e) {
+            L.DomEvent.preventDefault(e);
+            map.setView([46.5, 2.5], 6, { animate: true, duration: 1 });
+        };
+        return btn;
+    }
+});
+new homeBtn().addTo(map);
+
+let markersLayer = L.layerGroup().addTo(map);
+let heatLayer = null;
+let heatmapActive = false;
+let chartInstance = null;
+let allAqiData = [];
+let allMeteoData = {};
+let allPredictions = {};
+
+// ══════════════════════════════════════════
+// CHARGEMENT DES DONNEES
+// ══════════════════════════════════════════
+async function loadAll() {
+    try {
+        const [aqiRes, meteoRes, predRes, qualRes] = await Promise.all([
+            fetch('/api/aqi/'),
+            fetch('/api/meteo/'),
+            fetch('/api/predictions/'),
+            fetch('/api/qualite/')
+        ]);
+
+        const aqiData   = await aqiRes.json();
+        const meteoData = await meteoRes.json();
+        const predData  = await predRes.json();
+        const qualData  = await qualRes.json();
+
+        allAqiData = aqiData.villes || [];
+
+        // Index météo par ville
+        (meteoData.meteo || []).forEach(m => { allMeteoData[m.ville] = m; });
+
+        // Index prédictions par ville
+        (predData.predictions || []).forEach(p => { allPredictions[p.ville] = p; });
+
+        renderKPIs(allAqiData, qualData.rapports);
+        renderVillesList(allAqiData);
+        renderMap(allAqiData);
+        renderQualite(qualData.rapports);
+
+        document.getElementById('last-update').textContent =
+            'Mis à jour : ' + new Date().toLocaleTimeString('fr-FR');
+
+    } catch(e) {
+        console.error('Erreur chargement:', e);
+    }
+}
+
+// ══════════════════════════════════════════
+// KPI CARDS
+// ══════════════════════════════════════════
+function renderKPIs(villes, rapports) {
+    if (!villes.length) return;
+
+    const aqis = villes.map(v => v.aqi);
+    const moyen = (aqis.reduce((a,b) => a+b, 0) / aqis.length).toFixed(1);
+    const max = villes.reduce((a,b) => a.aqi > b.aqi ? a : b);
+    const min = villes.reduce((a,b) => a.aqi < b.aqi ? a : b);
+
+    document.getElementById('kpi-aqi-moyen').textContent = moyen;
+    document.getElementById('kpi-aqi-moyen').style.color = getCouleur(parseFloat(moyen));
+    document.getElementById('kpi-max-ville').textContent = max.ville;
+    document.getElementById('kpi-max-aqi').textContent = 'AQI : ' + max.aqi;
+    document.getElementById('kpi-min-ville').textContent = min.ville;
+    document.getElementById('kpi-min-aqi').textContent = 'AQI : ' + min.aqi;
+
+    if (rapports && rapports.length) {
+        const r = rapports[0];
+        const el = document.getElementById('kpi-qualite');
+        el.textContent = r.statut;
+        el.className = r.statut === 'OK' ? 'value statut-ok' : 'value statut-warning';
+        document.getElementById('kpi-completude').textContent =
+            'Complétude : ' + r.taux_completude + '%';
+    }
+
+    const ts = villes[0].timestamp;
+    if (ts) {
+        const d = new Date(ts);
+        document.getElementById('kpi-heure').textContent =
+            d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+    }
+}
+
+// ══════════════════════════════════════════
+// LISTE DES VILLES
+// ══════════════════════════════════════════
+function renderVillesList(villes) {
+    const sorted = [...villes].sort((a,b) => b.aqi - a.aqi);
+    const html = sorted.map(v => `
+        <div class="ville-item" onclick="selectVille('${v.ville}', ${v.lat}, ${v.lon})">
+            <div>
+                <div class="nom">${v.ville}</div>
+                <div class="niveau">${v.niveau}</div>
+            </div>
+            <div class="aqi-badge" style="background:${v.couleur}">${v.aqi}</div>
+        </div>
+    `).join('');
+    document.getElementById('villes-list').innerHTML = html;
+}
+
+// ══════════════════════════════════════════
+// CARTE LEAFLET — MARQUEURS
+// ══════════════════════════════════════════
+function renderMap(villes) {
+    markersLayer.clearLayers();
+
+    villes.forEach(v => {
+        const pred = allPredictions[v.ville];
+        const meteo = allMeteoData[v.ville];
+
+        // Icône personnalisée
+        const icon = L.divIcon({
+            className: '',
+            html: `<div style="
+                background:${v.couleur};
+                width:40px; height:40px;
+                border-radius:50%;
+                border:3px solid white;
+                display:flex; align-items:center; justify-content:center;
+                font-weight:bold; font-size:11px; color:#000;
+                box-shadow:0 2px 8px rgba(0,0,0,0.5);
+                cursor:pointer;
+            ">${v.aqi}</div>`,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20],
+        });
+
+        const popup = L.popup({ maxWidth: 280 }).setContent(`
+            <div class="popup-title">📍 ${v.ville}</div>
+                <div class="popup-row">
+    <span class="pk">AQI Actuel</span>
+    <span class="pv" style="color:${v.couleur};font-size:1.1rem">${v.aqi} — ${v.niveau}</span>
+</div>
+<div class="popup-row">
+    <span class="pk">Source</span>
+    <span class="pv" style="color:#888;font-size:0.75rem">${v.source_aqi === 'ML' ? '🤖 Estimé par ML' : '📡 AQICN temps réel'}</span>
+</div>
+            <hr class="popup-divider">
+            <div class="popup-row"><span class="pk">PM2.5</span><span class="pv">${v.pm25 ?? '—'} µg/m³</span></div>
+            <div class="popup-row"><span class="pk">PM10</span><span class="pv">${v.pm10 ?? '—'} µg/m³</span></div>
+            <div class="popup-row"><span class="pk">O3</span><span class="pv">${v.o3 ?? '—'} µg/m³</span></div>
+            <div class="popup-row"><span class="pk">NO2</span><span class="pv">${v.no2 ?? '—'} µg/m³</span></div>
+            ${meteo ? `
+            <hr class="popup-divider">
+            <div class="popup-row"><span class="pk">🌡️ Température</span><span class="pv">${meteo.temperature}°C</span></div>
+            <div class="popup-row"><span class="pk">💧 Humidité</span><span class="pv">${meteo.humidite}%</span></div>
+            <div class="popup-row"><span class="pk">💨 Vent</span><span class="pv">${meteo.vitesse_vent} m/s</span></div>
+            <div class="popup-row"><span class="pk">🌧️ Précip.</span><span class="pv">${meteo.precipitation} mm/h</span></div>
+            ` : ''}
+            ${pred ? `
+            <hr class="popup-divider">
+            <div class="popup-pred">🤖 Prédiction ML : <strong style="color:${pred.couleur}">${pred.aqi_predit} (${pred.niveau})</strong></div>
+            ` : ''}
+        `);
+
+        L.marker([v.lat, v.lon], { icon })
+            .bindPopup(popup)
+            .on('click', () => selectVille(v.ville, v.lat, v.lon))
+            .addTo(markersLayer);
+    });
+
+    // Heatmap data
+    const heatData = villes.map(v => [v.lat, v.lon, v.aqi / 150]);
+    if (heatLayer) map.removeLayer(heatLayer);
+    heatLayer = L.heatLayer(heatData, {
+        radius: 60, blur: 40, maxZoom: 10,
+        gradient: { 0.2: '#00E400', 0.5: '#FFFF00', 0.7: '#FF7E00', 1.0: '#FF0000' }
+    });
+}
+
+// ══════════════════════════════════════════
+// SELECTION D'UNE VILLE
+// ══════════════════════════════════════════
+async function selectVille(ville, lat, lon) {
+    map.setView([lat, lon], 8, { animate: true });
+
+    document.getElementById('ville-detail').style.display = 'block';
+    document.getElementById('detail-titre').textContent = '📍 ' + ville;
+
+    const v = allAqiData.find(x => x.ville === ville) || {};
+    const m = allMeteoData[ville] || {};
+    const p = allPredictions[ville] || {};
+
+    document.getElementById('detail-grid').innerHTML = `
+        <div class="detail-item">
+            <div class="d-label">AQI</div>
+            <div class="d-value" style="color:${v.couleur||'white'}">${v.aqi ?? '—'}</div>
+        </div>
+        <div class="detail-item">
+            <div class="d-label">Prédiction ML</div>
+            <div class="d-value" style="color:${p.couleur||'white'}">${p.aqi_predit ?? '—'}</div>
+        </div>
+        <div class="detail-item">
+            <div class="d-label">Température</div>
+            <div class="d-value">${m.temperature ?? '—'}°C</div>
+        </div>
+        <div class="detail-item">
+            <div class="d-label">Humidité</div>
+            <div class="d-value">${m.humidite ?? '—'}%</div>
+        </div>
+        <div class="detail-item">
+            <div class="d-label">Vent</div>
+            <div class="d-value">${m.vitesse_vent ?? '—'} m/s</div>
+        </div>
+        <div class="detail-item">
+            <div class="d-label">Pression</div>
+            <div class="d-value">${m.pression ?? '—'} hPa</div>
+        </div>
+    `;
+
+    // Historique
+    try {
+        const res = await fetch('/api/historique/?ville=' + ville);
+        const data = await res.json();
+        renderChart(data.historique || [], ville);
+    } catch(e) {}
+}
+
+// ══════════════════════════════════════════
+// GRAPHIQUE HISTORIQUE
+// ══════════════════════════════════════════
+function renderChart(historique, ville) {
+    const labels = historique.map(h => h.heure + 'h');
+    const values = historique.map(h => h.aqi);
+
+    if (chartInstance) chartInstance.destroy();
+
+    const ctx = document.getElementById('chart-aqi').getContext('2d');
+    chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'AQI ' + ville,
+                data: values,
+                borderColor: '#7B2D8B',
+                backgroundColor: 'rgba(123,45,139,0.2)',
+                tension: 0.4,
+                fill: true,
+                pointRadius: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: '#888', font: { size: 9 } }, grid: { color: '#2a2d3a' } },
+                y: { ticks: { color: '#888', font: { size: 9 } }, grid: { color: '#2a2d3a' } }
+            }
+        }
+    });
+}
+
+// ══════════════════════════════════════════
+// QUALITE DES DONNEES
+// ══════════════════════════════════════════
+function renderQualite(rapports) {
+    if (!rapports || !rapports.length) {
+        document.getElementById('qualite-panel').innerHTML = 'Aucun rapport';
+        return;
+    }
+    const r = rapports[0];
+    document.getElementById('qualite-panel').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.8rem">
+            <div style="color:#888">Source</div><div>${r.source}</div>
+            <div style="color:#888">Enregistrements</div><div>${r.nb_enregistrements}</div>
+            <div style="color:#888">Doublons</div><div>${r.nb_doublons}</div>
+            <div style="color:#888">Nulls</div><div>${r.nb_nulls}</div>
+            <div style="color:#888">Complétude</div>
+            <div class="${r.statut==='OK'?'statut-ok':'statut-warning'}">${r.taux_completude}%</div>
+            <div style="color:#888">Statut</div>
+            <div class="${r.statut==='OK'?'statut-ok':'statut-warning'}">${r.statut}</div>
+        </div>
+    `;
+}
+
+// ══════════════════════════════════════════
+// TOGGLE HEATMAP
+// ══════════════════════════════════════════
+function toggleHeatmap() {
+    if (!heatLayer) return;
+    if (heatmapActive) {
+        map.removeLayer(heatLayer);
+        document.querySelector('.toggle-btn').textContent = '🔥 Activer Heatmap';
+    } else {
+        map.addLayer(heatLayer);
+        document.querySelector('.toggle-btn').textContent = '📍 Désactiver Heatmap';
+    }
+    heatmapActive = !heatmapActive;
+}
+
+function getCouleur(aqi) {
+    if (aqi <= 50)  return '#00E400';
+    if (aqi <= 100) return '#FFFF00';
+    if (aqi <= 150) return '#FF7E00';
+    if (aqi <= 200) return '#FF0000';
+    return '#8F3F97';
+}
+
+// ══════════════════════════════════════════
+// LANCEMENT
+// ══════════════════════════════════════════
+loadAll();
+setInterval(loadAll, 60000); // Rafraîchissement auto toutes les 60s
+</script>
+
+</body>
+</html>
